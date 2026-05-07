@@ -106,6 +106,7 @@ class TubePocketApp:
         labels = [
             ("yt-dlp", "ytdlp_status"),
             ("ffmpeg", "ffmpeg_status"),
+            ("Deno", "deno_status"),
             ("Protocol", "protocol_status"),
             ("Cookies", "cookies_status"),
             ("Output", "output_status"),
@@ -201,6 +202,7 @@ class TubePocketApp:
     def refresh_status(self) -> None:
         self.status_values["ytdlp_status"].configure(text="available" if tool_available("yt-dlp") else "missing from PATH")
         self.status_values["ffmpeg_status"].configure(text="available" if tool_available("ffmpeg") else "missing from PATH")
+        self.status_values["deno_status"].configure(text="available" if tool_available("deno") else "missing from PATH")
         self.status_values["output_status"].configure(text=str(default_output_dir()))
         self.status_values["runtime_status"].configure(text="packaged exe" if is_packaged() else "source/development")
         cookies = self.current_cookie_config()

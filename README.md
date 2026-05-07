@@ -11,10 +11,19 @@ The normal user entry point is the packaged `TubePocket.exe`. Source execution i
 - Windows
 - `yt-dlp` available on `PATH`
 - `ffmpeg` available on `PATH` for video merging and subtitle conversion
+- `deno` on `PATH` is recommended for YouTube JavaScript challenge solving
 - Chrome or Edge with Tampermonkey for the userscript
 - Python 3.13 and `uv` for development/building
 
 TubePocket does not bundle `yt-dlp` or `ffmpeg`.
+
+If you install `yt-dlp` with `uv tool`, prefer:
+
+```powershell
+uv tool install --force "yt-dlp[default]"
+```
+
+The plain `uv tool install yt-dlp` installs the base PyPI package. For YouTube challenge solving, yt-dlp's EJS documentation recommends installing the `default` dependency group because it includes the companion `yt-dlp-ejs` package. TubePocket only detects local tools; it does not install JS runtimes, download EJS components, or change proxy settings for you.
 
 ## Development
 
@@ -103,6 +112,33 @@ The app supports three modes:
 Cookie settings are stored in a small JSON config under the user's local application data directory.
 
 When TubePocket is launched from the browser and the saved cookie settings are incomplete, the app stops before calling `yt-dlp`, opens the status page, and shows a clear warning. For example, a missing `cookies.txt` path is reported as a setup issue instead of surfacing only as a download failure.
+
+## Proxy and YouTube JS Challenges
+
+Some videos or cookie-backed requests may require YouTube JavaScript challenge solving. If downloads fail with warnings about EJS, remote components, JavaScript challenges, or "Only images are available", check your `yt-dlp` installation first:
+
+```powershell
+uv tool install --force "yt-dlp[default]"
+deno --version
+yt-dlp -v --cookies-from-browser firefox --dump-single-json --no-playlist "URL"
+```
+
+If your network requires a proxy, configure it in your shell or yt-dlp configuration. TubePocket will not change proxy settings automatically.
+
+PowerShell example:
+
+```powershell
+$env:HTTP_PROXY='http://127.0.0.1:7890'
+$env:HTTPS_PROXY='http://127.0.0.1:7890'
+```
+
+yt-dlp config example:
+
+```text
+--proxy http://127.0.0.1:7890
+```
+
+TubePocket's status page only detects whether `yt-dlp`, `ffmpeg`, and `deno` are visible on `PATH`.
 
 ## Legal
 
