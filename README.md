@@ -97,10 +97,12 @@ The fixed filename template is:
 The app supports three modes:
 
 - No cookies
-- `yt-dlp --cookies-from-browser <browser>`
+- `yt-dlp --cookies-from-browser <browser>`, selected from a browser list in the GUI
 - `yt-dlp --cookies <cookies.txt>`
 
 Cookie settings are stored in a small JSON config under the user's local application data directory.
+
+When TubePocket is launched from the browser and the saved cookie settings are incomplete, the app stops before calling `yt-dlp`, opens the status page, and shows a clear warning. For example, a missing `cookies.txt` path is reported as a setup issue instead of surfacing only as a download failure.
 
 ## Legal
 

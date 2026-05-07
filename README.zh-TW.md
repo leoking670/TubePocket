@@ -105,10 +105,12 @@ HKCU\Software\Classes\tubepocket
 應用程式支援三種 cookies 模式：
 
 - 不使用 cookies
-- `yt-dlp --cookies-from-browser <browser>`
+- `yt-dlp --cookies-from-browser <browser>`，在 GUI 中從瀏覽器清單選擇
 - `yt-dlp --cookies <cookies.txt>`
 
 Cookie 設定會儲存在使用者本機應用程式資料目錄下的一個小型 JSON 設定檔。
+
+當 TubePocket 從瀏覽器被 URL Scheme 拉起，且已儲存的 cookie 設定不完整時，應用程式會先停止，不會直接呼叫 `yt-dlp`。它會切到狀態頁並顯示明確警告，例如 `cookies.txt` 路徑不存在時會被提示為設定問題，而不是只顯示下載失敗。
 
 ## 法律與授權
 

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import queue
 import re
-import sys
 import threading
 import tkinter as tk
-from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from tubepocket.config import AppConfig, default_output_dir, load_config, save_config
@@ -21,7 +19,15 @@ from tubepocket.formats import (
 from tubepocket.models import CookieMode, DownloadMode, DownloadSelection, MediaFormat, SubtitleItem, SubtitleOutput, VideoInfo
 from tubepocket.registry import ProtocolRegistry, RegistryState, current_executable, is_packaged
 from tubepocket.url_scheme import LaunchUrl, UrlError, parse_launch_arg
-from tubepocket.ytdlp import YtdlpError, download_args, load_metadata, stream_process, tool_available
+from tubepocket.ytdlp import (
+    SUPPORTED_COOKIE_BROWSERS,
+    YtdlpError,
+    download_args,
+    load_metadata,
+    stream_process,
+    tool_available,
+    validate_cookie_config,
+)
 
 
 def run_app(argv: list[str]) -> None:
@@ -101,6 +107,7 @@ class TubePocketApp:
             ("yt-dlp", "ytdlp_status"),
             ("ffmpeg", "ffmpeg_status"),
             ("Protocol", "protocol_status"),
+            ("Cookies", "cookies_status"),
             ("Output", "output_status"),
             ("Runtime", "runtime_status"),
         ]
@@ -120,9 +127,15 @@ class TubePocketApp:
                 row=0, column=idx, sticky="w", padx=(0, 16)
             )
         ttk.Label(cookies, text="Browser").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        browser = ttk.Entry(cookies, textvariable=self.cookies_browser, width=18)
+        browser = ttk.Combobox(
+            cookies,
+            textvariable=self.cookies_browser,
+            values=SUPPORTED_COOKIE_BROWSERS,
+            width=18,
+            state="readonly",
+        )
         browser.grid(row=1, column=1, sticky="w", pady=(8, 0))
-        browser.bind("<FocusOut>", lambda _event: self.save_cookie_config())
+        browser.bind("<<ComboboxSelected>>", lambda _event: self.save_cookie_config())
         ttk.Label(cookies, text="File").grid(row=2, column=0, sticky="w", pady=(8, 0))
         file_entry = ttk.Entry(cookies, textvariable=self.cookies_path)
         file_entry.grid(row=2, column=1, sticky="ew", pady=(8, 0))
@@ -190,6 +203,10 @@ class TubePocketApp:
         self.status_values["ffmpeg_status"].configure(text="available" if tool_available("ffmpeg") else "missing from PATH")
         self.status_values["output_status"].configure(text=str(default_output_dir()))
         self.status_values["runtime_status"].configure(text="packaged exe" if is_packaged() else "source/development")
+        cookies = self.current_cookie_config()
+        cookie_issues = validate_cookie_config(cookies)
+        cookie_text = "ok" if not cookie_issues else "needs attention: " + "; ".join(cookie_issues)
+        self.status_values["cookies_status"].configure(text=cookie_text)
 
         exe = current_executable()
         try:
@@ -241,7 +258,10 @@ class TubePocketApp:
             self.config.cookies.mode = CookieMode(self.cookies_mode.get())
         except ValueError:
             self.config.cookies.mode = CookieMode.NONE
-        self.config.cookies.browser = self.cookies_browser.get().strip() or "chrome"
+        browser = self.cookies_browser.get().strip().lower()
+        self.config.cookies.browser = browser if browser in SUPPORTED_COOKIE_BROWSERS else "chrome"
+        if self.cookies_browser.get() != self.config.cookies.browser:
+            self.cookies_browser.set(self.config.cookies.browser)
         self.config.cookies.cookies_path = self.cookies_path.get().strip()
         return self.config.cookies
 
@@ -256,9 +276,20 @@ class TubePocketApp:
     def load_video_async(self, url: str) -> None:
         if not url.strip():
             return
+        cookies = self.current_cookie_config()
+        cookie_issues = validate_cookie_config(cookies)
+        if cookie_issues:
+            message = "Cookie settings need attention before TubePocket can read this video:\n\n" + "\n".join(
+                f"- {issue}" for issue in cookie_issues
+            )
+            self.set_status("Cookie settings need attention")
+            self.append_log(message)
+            self.refresh_status()
+            self.main.select(self.status_tab)
+            messagebox.showwarning("TubePocket cookie settings", message)
+            return
         self.set_status("Loading metadata...")
         self.append_log(f"Loading metadata: {url}")
-        cookies = self.current_cookie_config()
 
         def worker() -> None:
             try:
@@ -454,4 +485,3 @@ def row_for_audio(fmt: MediaFormat) -> list[str]:
 def progress_summary(line: str) -> str:
     match = re.search(r"\[download\]\s+(.+)", line)
     return match.group(1).strip() if match else line[:120]
-

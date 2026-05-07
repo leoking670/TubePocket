@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tubepocket.models import CookieConfig, CookieMode, DownloadMode, DownloadSelection, MediaFormat, SubtitleItem, SubtitleOutput
-from tubepocket.ytdlp import FILENAME_TEMPLATE, cookie_args, download_args, metadata_args
+from tubepocket.ytdlp import FILENAME_TEMPLATE, cookie_args, download_args, metadata_args, validate_cookie_config
 
 
 def test_cookie_args() -> None:
@@ -15,6 +15,21 @@ def test_cookie_args() -> None:
         "--cookies",
         "C:/tmp/cookies.txt",
     ]
+
+
+def test_validate_cookie_config() -> None:
+    assert validate_cookie_config(CookieConfig()) == []
+    assert validate_cookie_config(CookieConfig(mode=CookieMode.BROWSER, browser="edge")) == []
+    assert validate_cookie_config(CookieConfig(mode=CookieMode.BROWSER, browser="unknown"))
+    assert validate_cookie_config(CookieConfig(mode=CookieMode.FILE, cookies_path=""))
+    assert validate_cookie_config(CookieConfig(mode=CookieMode.FILE, cookies_path="C:/missing/cookies.txt"))
+
+
+def test_validate_cookie_file_exists(tmp_path: Path) -> None:
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+
+    assert validate_cookie_config(CookieConfig(mode=CookieMode.FILE, cookies_path=str(cookies))) == []
 
 
 def test_metadata_args_uses_argument_list() -> None:
@@ -104,4 +119,3 @@ def test_subtitle_download_auto_original(tmp_path: Path) -> None:
 
     assert "--write-auto-subs" in args
     assert "--convert-subs" not in args
-

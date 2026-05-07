@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,6 +14,7 @@ from tubepocket.models import CookieConfig, CookieMode, DownloadMode, DownloadSe
 
 
 FILENAME_TEMPLATE = "%(uploader)s - %(title)s [%(id)s].%(ext)s"
+SUPPORTED_COOKIE_BROWSERS = ["chrome", "edge", "firefox", "brave", "chromium", "opera", "vivaldi"]
 
 
 @dataclass(slots=True)
@@ -38,6 +39,9 @@ def tool_available(name: str) -> bool:
 
 
 def metadata_args(url: str, cookies: CookieConfig) -> list[str]:
+    issues = validate_cookie_config(cookies)
+    if issues:
+        raise ValueError("; ".join(issues))
     return ["yt-dlp", "--dump-single-json", "--no-playlist", *cookie_args(cookies), url]
 
 
@@ -54,6 +58,9 @@ def load_metadata(url: str, cookies: CookieConfig) -> tuple[VideoInfo, ProcessRe
 
 
 def download_args(selection: DownloadSelection) -> list[str]:
+    issues = validate_cookie_config(selection.cookies)
+    if issues:
+        raise ValueError("; ".join(issues))
     selection.output_dir.mkdir(parents=True, exist_ok=True)
     base = [
         "yt-dlp",
@@ -125,3 +132,19 @@ def cookie_args(cookies: CookieConfig) -> list[str]:
         return ["--cookies", path] if path else []
     return []
 
+
+def validate_cookie_config(cookies: CookieConfig) -> list[str]:
+    if cookies.mode == CookieMode.BROWSER:
+        browser = cookies.browser.strip().lower()
+        if not browser:
+            return ["Choose a browser for cookies-from-browser."]
+        if browser not in SUPPORTED_COOKIE_BROWSERS:
+            supported = ", ".join(SUPPORTED_COOKIE_BROWSERS)
+            return [f"Unsupported browser '{cookies.browser}'. Choose one of: {supported}."]
+    if cookies.mode == CookieMode.FILE:
+        path = cookies.cookies_path.strip()
+        if not path:
+            return ["Choose a cookies.txt file."]
+        if not Path(path).is_file():
+            return [f"Cookies file does not exist: {path}"]
+    return []
