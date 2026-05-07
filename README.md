@@ -1,5 +1,7 @@
 # TubePocket
 
+[繁體中文](README.zh-TW.md)
+
 TubePocket is a GPL-3.0-only Windows desktop tool for visually selecting YouTube video, audio, or subtitles through `yt-dlp`.
 
 The normal user entry point is the packaged `TubePocket.exe`. Source execution is for review, development, and building only. URL scheme registration is intentionally disabled when running from source.
@@ -105,4 +107,3 @@ Cookie settings are stored in a small JSON config under the user's local applica
 TubePocket is licensed under `GPL-3.0-only`. It is a local interface for invoking user-installed tools. Users are responsible for ensuring they have the right to download content and for complying with YouTube terms, third-party tool licenses, and local law.
 
 `yt-dlp` and `ffmpeg` are not distributed with this project.
-
