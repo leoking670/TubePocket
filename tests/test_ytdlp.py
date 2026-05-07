@@ -5,7 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from tubepocket.models import CookieConfig, CookieMode, DownloadMode, DownloadSelection, MediaFormat, SubtitleItem, SubtitleOutput
-from tubepocket.ytdlp import FILENAME_TEMPLATE, cookie_args, download_args, metadata_args, validate_cookie_config
+from tubepocket.ytdlp import (
+    FILENAME_TEMPLATE,
+    ProcessResult,
+    cookie_args,
+    download_args,
+    metadata_args,
+    summarize_ytdlp_error,
+    validate_cookie_config,
+)
 
 
 def test_cookie_args() -> None:
@@ -119,3 +127,21 @@ def test_subtitle_download_auto_original(tmp_path: Path) -> None:
 
     assert "--write-auto-subs" in args
     assert "--convert-subs" not in args
+
+
+def test_summarize_ytdlp_error_keeps_dialog_short() -> None:
+    stderr = "\n".join(
+        [
+            "WARNING: [youtube] Download failed: [SSL: UNEXPECTED_EOF_WHILE_READING]",
+            "WARNING: [youtube] Remote components challenge solver script was skipped",
+            "ERROR: [youtube] abc123: Requested format is not available. Only images are available for download",
+        ]
+    )
+
+    summary = summarize_ytdlp_error(ProcessResult(1, "", stderr))
+
+    assert "Network/TLS failed" in summary
+    assert "YouTube JS challenge solving failed" in summary
+    assert "requested media format" in summary
+    assert "image/storyboard formats" in summary
+    assert len(summary.splitlines()) == 4

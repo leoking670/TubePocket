@@ -24,6 +24,7 @@ from tubepocket.ytdlp import (
     YtdlpError,
     download_args,
     load_metadata,
+    summarize_ytdlp_error,
     stream_process,
     tool_available,
     validate_cookie_config,
@@ -121,28 +122,33 @@ class TubePocketApp:
 
         cookies = ttk.LabelFrame(self.status_tab, text="Cookies", padding=8)
         cookies.grid(row=len(labels), column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        cookies.columnconfigure(1, weight=1)
+
+        cookie_modes = ttk.Frame(cookies)
+        cookie_modes.grid(row=0, column=0, columnspan=3, sticky="w")
         for idx, (text, value) in enumerate(
             [("None", CookieMode.NONE.value), ("From browser", CookieMode.BROWSER.value), ("cookies.txt", CookieMode.FILE.value)]
         ):
-            ttk.Radiobutton(cookies, text=text, variable=self.cookies_mode, value=value, command=self.save_cookie_config).grid(
+            ttk.Radiobutton(cookie_modes, text=text, variable=self.cookies_mode, value=value, command=self.on_cookie_mode_changed).grid(
                 row=0, column=idx, sticky="w", padx=(0, 16)
             )
-        ttk.Label(cookies, text="Browser").grid(row=1, column=0, sticky="w", pady=(8, 0))
-        browser = ttk.Combobox(
+
+        self.cookie_none_hint = ttk.Label(cookies, text="✅ No browser cookies will be used.")
+        self.cookie_browser_label = ttk.Label(cookies, text="Browser")
+        self.cookie_browser_combo = ttk.Combobox(
             cookies,
             textvariable=self.cookies_browser,
             values=SUPPORTED_COOKIE_BROWSERS,
             width=18,
             state="readonly",
         )
-        browser.grid(row=1, column=1, sticky="w", pady=(8, 0))
-        browser.bind("<<ComboboxSelected>>", lambda _event: self.save_cookie_config())
-        ttk.Label(cookies, text="File").grid(row=2, column=0, sticky="w", pady=(8, 0))
-        file_entry = ttk.Entry(cookies, textvariable=self.cookies_path)
-        file_entry.grid(row=2, column=1, sticky="ew", pady=(8, 0))
-        file_entry.bind("<FocusOut>", lambda _event: self.save_cookie_config())
-        ttk.Button(cookies, text="Browse", command=self.choose_cookies_file).grid(row=2, column=2, padx=(8, 0), pady=(8, 0))
-        cookies.columnconfigure(1, weight=1)
+        self.cookie_browser_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_cookie_config())
+
+        self.cookie_file_label = ttk.Label(cookies, text="File")
+        self.cookie_file_entry = ttk.Entry(cookies, textvariable=self.cookies_path)
+        self.cookie_file_entry.bind("<FocusOut>", lambda _event: self.save_cookie_config())
+        self.cookie_file_button = ttk.Button(cookies, text="Browse", command=self.choose_cookies_file)
+        self.update_cookie_fields()
 
     def _build_download_tab(self) -> None:
         self.download_tab.columnconfigure(0, weight=1)
@@ -200,29 +206,29 @@ class TubePocketApp:
         self.update_log_visibility()
 
     def refresh_status(self) -> None:
-        self.status_values["ytdlp_status"].configure(text="available" if tool_available("yt-dlp") else "missing from PATH")
-        self.status_values["ffmpeg_status"].configure(text="available" if tool_available("ffmpeg") else "missing from PATH")
-        self.status_values["deno_status"].configure(text="available" if tool_available("deno") else "missing from PATH")
-        self.status_values["output_status"].configure(text=str(default_output_dir()))
-        self.status_values["runtime_status"].configure(text="packaged exe" if is_packaged() else "source/development")
+        self.status_values["ytdlp_status"].configure(text=tool_status("yt-dlp", required=True))
+        self.status_values["ffmpeg_status"].configure(text=tool_status("ffmpeg", required=True))
+        self.status_values["deno_status"].configure(text=tool_status("deno", required=False))
+        self.status_values["output_status"].configure(text=f"📁 {default_output_dir()}")
+        self.status_values["runtime_status"].configure(text="✅ Packaged exe" if is_packaged() else "ℹ️ Source/development")
         cookies = self.current_cookie_config()
         cookie_issues = validate_cookie_config(cookies)
-        cookie_text = "ok" if not cookie_issues else "needs attention: " + "; ".join(cookie_issues)
+        cookie_text = "✅ Ready" if not cookie_issues else "⚠️ " + "; ".join(cookie_issues)
         self.status_values["cookies_status"].configure(text=cookie_text)
 
         exe = current_executable()
         try:
             status = self.registry.status(exe)
             if status.state == RegistryState.REGISTERED_CURRENT:
-                text = "registered to current exe"
+                text = "✅ Registered to current exe"
             elif status.state == RegistryState.REGISTERED_OTHER:
                 exists = "exists" if status.target_exists else "missing"
-                text = f"registered elsewhere: {status.target_path} ({exists})"
+                text = f"⚠️ Registered elsewhere: {status.target_path} ({exists})"
             else:
-                text = "not registered"
+                text = "⚠️ Not registered"
             self.status_values["protocol_status"].configure(text=text)
         except Exception as exc:
-            self.status_values["protocol_status"].configure(text=f"error: {exc}")
+            self.status_values["protocol_status"].configure(text=f"❌ Error: {exc}")
 
         if not is_packaged():
             self.register_button.configure(state="disabled", text="Register requires packaged exe")
@@ -254,6 +260,31 @@ class TubePocketApp:
             self.cookies_path.set(path)
             self.cookies_mode.set(CookieMode.FILE.value)
             self.save_cookie_config()
+            self.update_cookie_fields()
+
+    def on_cookie_mode_changed(self) -> None:
+        self.update_cookie_fields()
+        self.save_cookie_config()
+        self.refresh_status()
+
+    def update_cookie_fields(self) -> None:
+        self.cookie_none_hint.grid_remove()
+        self.cookie_browser_label.grid_remove()
+        self.cookie_browser_combo.grid_remove()
+        self.cookie_file_label.grid_remove()
+        self.cookie_file_entry.grid_remove()
+        self.cookie_file_button.grid_remove()
+
+        mode = self.cookies_mode.get()
+        if mode == CookieMode.BROWSER.value:
+            self.cookie_browser_label.grid(row=1, column=0, sticky="w", pady=(8, 0))
+            self.cookie_browser_combo.grid(row=1, column=1, sticky="w", pady=(8, 0))
+        elif mode == CookieMode.FILE.value:
+            self.cookie_file_label.grid(row=1, column=0, sticky="w", pady=(8, 0))
+            self.cookie_file_entry.grid(row=1, column=1, sticky="ew", pady=(8, 0))
+            self.cookie_file_button.grid(row=1, column=2, padx=(8, 0), pady=(8, 0))
+        else:
+            self.cookie_none_hint.grid(row=1, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def current_cookie_config(self):
         try:
@@ -301,9 +332,13 @@ class TubePocketApp:
                     self.worker_queue.put(("log", result.stderr))
             except YtdlpError as exc:
                 detail = exc.result.stderr if exc.result else str(exc)
-                self.worker_queue.put(("error", f"{exc}\n{detail}"))
+                self.worker_queue.put(("log", f"{exc}\n{detail}"))
+                self.worker_queue.put(("error", summarize_ytdlp_error(exc.result)))
             except Exception as exc:
-                self.worker_queue.put(("error", str(exc)))
+                if isinstance(exc, YtdlpError):
+                    self.worker_queue.put(("error", summarize_ytdlp_error(exc.result)))
+                else:
+                    self.worker_queue.put(("error", str(exc)))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -487,3 +522,9 @@ def row_for_audio(fmt: MediaFormat) -> list[str]:
 def progress_summary(line: str) -> str:
     match = re.search(r"\[download\]\s+(.+)", line)
     return match.group(1).strip() if match else line[:120]
+
+
+def tool_status(name: str, required: bool) -> str:
+    if tool_available(name):
+        return "✅ Available"
+    return "❌ Missing from PATH" if required else "⚠️ Missing from PATH"

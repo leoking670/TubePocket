@@ -148,3 +148,35 @@ def validate_cookie_config(cookies: CookieConfig) -> list[str]:
         if not Path(path).is_file():
             return [f"Cookies file does not exist: {path}"]
     return []
+
+
+def summarize_ytdlp_error(result: ProcessResult | None) -> str:
+    if not result:
+        return "yt-dlp failed. See the log for details."
+
+    text = "\n".join(part for part in [result.stderr, result.stdout] if part).strip()
+    lowered = text.lower()
+    hints: list[str] = []
+
+    if "unexpected_eof_while_reading" in lowered or "ssl" in lowered:
+        hints.append("Network/TLS failed. Check proxy, VPN, firewall, or certificate settings.")
+    if "remote components" in lowered or "challenge" in lowered:
+        hints.append("YouTube JS challenge solving failed. Check yt-dlp[default], Deno, and proxy setup.")
+    if "requested format is not available" in lowered:
+        hints.append("yt-dlp did not find the requested media format for this video.")
+    if "only images are available" in lowered:
+        hints.append("yt-dlp only found image/storyboard formats, not playable video or audio.")
+
+    if hints:
+        return "\n".join(dict.fromkeys(hints))
+
+    fallback = last_relevant_line(text)
+    return fallback or "yt-dlp failed. See the log for details."
+
+
+def last_relevant_line(text: str) -> str:
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if stripped.startswith(("ERROR:", "WARNING:")):
+            return stripped
+    return ""
