@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-3.0-only
+
+[project]
+name = "tubepocket"
+version = "0.1.0"
+description = "A lightweight Windows GUI for visually selecting YouTube media through yt-dlp."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+license = "GPL-3.0-only"
+authors = [{ name = "TubePocket contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0",
+    "pytest>=8.0",
+]
+
+[project.scripts]
+tubepocket-dev = "tubepocket.__main__:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
