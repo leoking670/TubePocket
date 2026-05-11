@@ -146,7 +146,7 @@ yt-dlp 設定檔範例：
 --proxy http://127.0.0.1:7890
 ```
 
-TubePocket 的狀態頁只會偵測 `yt-dlp`、`ffmpeg`、`deno` 是否能從 `PATH` 找到。
+TubePocket 的狀態頁只做本機條件偵測。它會檢查 `yt-dlp`、`ffmpeg`、`deno` 是否能從 `PATH` 找到。對於 EJS 支援，如果你的 `yt-dlp` 是由 `uv tool` 管理，TubePocket 可以確認該環境中是否安裝 `yt-dlp-ejs`。如果你使用 GitHub releases 的獨立 `yt-dlp.exe` 或其他安裝方式，EJS 狀態可能顯示為 unknown，因為官方執行檔可能已經將必要元件內建。
 
 ## 法律與授權
 

@@ -5,15 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tubepocket.models import CookieConfig, CookieMode, DownloadMode, DownloadSelection, MediaFormat, SubtitleItem, SubtitleOutput
-from tubepocket.ytdlp import (
-    FILENAME_TEMPLATE,
-    ProcessResult,
-    cookie_args,
-    download_args,
-    metadata_args,
-    summarize_ytdlp_error,
-    validate_cookie_config,
-)
+from tubepocket.ytdlp import FILENAME_TEMPLATE, cookie_args, download_args, metadata_args, yt_dlp_ejs_status
 
 
 def test_cookie_args() -> None:
@@ -23,21 +15,6 @@ def test_cookie_args() -> None:
         "--cookies",
         "C:/tmp/cookies.txt",
     ]
-
-
-def test_validate_cookie_config() -> None:
-    assert validate_cookie_config(CookieConfig()) == []
-    assert validate_cookie_config(CookieConfig(mode=CookieMode.BROWSER, browser="edge")) == []
-    assert validate_cookie_config(CookieConfig(mode=CookieMode.BROWSER, browser="unknown"))
-    assert validate_cookie_config(CookieConfig(mode=CookieMode.FILE, cookies_path=""))
-    assert validate_cookie_config(CookieConfig(mode=CookieMode.FILE, cookies_path="C:/missing/cookies.txt"))
-
-
-def test_validate_cookie_file_exists(tmp_path: Path) -> None:
-    cookies = tmp_path / "cookies.txt"
-    cookies.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
-
-    assert validate_cookie_config(CookieConfig(mode=CookieMode.FILE, cookies_path=str(cookies))) == []
 
 
 def test_metadata_args_uses_argument_list() -> None:
@@ -51,6 +28,15 @@ def test_metadata_args_uses_argument_list() -> None:
         "chrome",
         "https://www.youtube.com/watch?v=abc123",
     ]
+
+
+def test_metadata_args_does_not_precheck_cookie_file() -> None:
+    args = metadata_args(
+        "https://www.youtube.com/watch?v=abc123",
+        CookieConfig(mode=CookieMode.FILE, cookies_path="C:/missing/cookies.txt"),
+    )
+
+    assert args[3:5] == ["--cookies", "C:/missing/cookies.txt"]
 
 
 def test_video_download_combines_video_only_with_audio(tmp_path: Path) -> None:
@@ -129,19 +115,36 @@ def test_subtitle_download_auto_original(tmp_path: Path) -> None:
     assert "--convert-subs" not in args
 
 
-def test_summarize_ytdlp_error_keeps_dialog_short() -> None:
-    stderr = "\n".join(
-        [
-            "WARNING: [youtube] Download failed: [SSL: UNEXPECTED_EOF_WHILE_READING]",
-            "WARNING: [youtube] Remote components challenge solver script was skipped",
-            "ERROR: [youtube] abc123: Requested format is not available. Only images are available for download",
-        ]
+def test_yt_dlp_ejs_status_detects_uv_tool_package(tmp_path: Path) -> None:
+    site_packages = tmp_path / "uv" / "tools" / "yt-dlp" / "Lib" / "site-packages"
+    (site_packages / "yt_dlp_ejs").mkdir(parents=True)
+
+    status = yt_dlp_ejs_status(
+        yt_dlp_path=str(tmp_path / ".local" / "bin" / "yt-dlp.exe"),
+        appdata=str(tmp_path),
+        userprofile=str(tmp_path),
     )
 
-    summary = summarize_ytdlp_error(ProcessResult(1, "", stderr))
+    assert status == "✅ yt-dlp-ejs installed"
 
-    assert "Network/TLS failed" in summary
-    assert "YouTube JS challenge solving failed" in summary
-    assert "requested media format" in summary
-    assert "image/storyboard formats" in summary
-    assert len(summary.splitlines()) == 4
+
+def test_yt_dlp_ejs_status_warns_for_uv_tool_without_package(tmp_path: Path) -> None:
+    (tmp_path / "uv" / "tools" / "yt-dlp" / "Lib" / "site-packages").mkdir(parents=True)
+
+    status = yt_dlp_ejs_status(
+        yt_dlp_path=str(tmp_path / ".local" / "bin" / "yt-dlp.exe"),
+        appdata=str(tmp_path),
+        userprofile=str(tmp_path),
+    )
+
+    assert status == "⚠️ yt-dlp-ejs not found; install yt-dlp[default]"
+
+
+def test_yt_dlp_ejs_status_is_unknown_for_release_exe(tmp_path: Path) -> None:
+    status = yt_dlp_ejs_status(
+        yt_dlp_path=str(tmp_path / "yt-dlp.exe"),
+        appdata=str(tmp_path / "missing"),
+        userprofile=str(tmp_path / "profile"),
+    )
+
+    assert status == "ℹ️ Unknown; official exe may bundle EJS"

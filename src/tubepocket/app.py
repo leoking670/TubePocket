@@ -24,10 +24,9 @@ from tubepocket.ytdlp import (
     YtdlpError,
     download_args,
     load_metadata,
-    summarize_ytdlp_error,
     stream_process,
     tool_available,
-    validate_cookie_config,
+    yt_dlp_ejs_status,
 )
 
 
@@ -106,12 +105,13 @@ class TubePocketApp:
         self.status_tab.columnconfigure(1, weight=1)
         labels = [
             ("yt-dlp", "ytdlp_status"),
+            ("yt-dlp EJS", "ytdlp_ejs_status"),
             ("ffmpeg", "ffmpeg_status"),
             ("Deno", "deno_status"),
             ("Protocol", "protocol_status"),
             ("Cookies", "cookies_status"),
             ("Output", "output_status"),
-            ("Runtime", "runtime_status"),
+            ("App", "runtime_status"),
         ]
         self.status_values: dict[str, ttk.Label] = {}
         for row, (label, key) in enumerate(labels):
@@ -207,14 +207,15 @@ class TubePocketApp:
 
     def refresh_status(self) -> None:
         self.status_values["ytdlp_status"].configure(text=tool_status("yt-dlp", required=True))
+        self.status_values["ytdlp_ejs_status"].configure(text=yt_dlp_ejs_status())
         self.status_values["ffmpeg_status"].configure(text=tool_status("ffmpeg", required=True))
         self.status_values["deno_status"].configure(text=tool_status("deno", required=False))
         self.status_values["output_status"].configure(text=f"📁 {default_output_dir()}")
         self.status_values["runtime_status"].configure(text="✅ Packaged exe" if is_packaged() else "ℹ️ Source/development")
         cookies = self.current_cookie_config()
-        cookie_issues = validate_cookie_config(cookies)
+        cookie_issues: list[str] = []
         cookie_text = "✅ Ready" if not cookie_issues else "⚠️ " + "; ".join(cookie_issues)
-        self.status_values["cookies_status"].configure(text=cookie_text)
+        self.status_values["cookies_status"].configure(text=cookie_status_text(cookies))
 
         exe = current_executable()
         try:
@@ -310,17 +311,6 @@ class TubePocketApp:
         if not url.strip():
             return
         cookies = self.current_cookie_config()
-        cookie_issues = validate_cookie_config(cookies)
-        if cookie_issues:
-            message = "Cookie settings need attention before TubePocket can read this video:\n\n" + "\n".join(
-                f"- {issue}" for issue in cookie_issues
-            )
-            self.set_status("Cookie settings need attention")
-            self.append_log(message)
-            self.refresh_status()
-            self.main.select(self.status_tab)
-            messagebox.showwarning("TubePocket cookie settings", message)
-            return
         self.set_status("Loading metadata...")
         self.append_log(f"Loading metadata: {url}")
 
@@ -332,13 +322,9 @@ class TubePocketApp:
                     self.worker_queue.put(("log", result.stderr))
             except YtdlpError as exc:
                 detail = exc.result.stderr if exc.result else str(exc)
-                self.worker_queue.put(("log", f"{exc}\n{detail}"))
-                self.worker_queue.put(("error", summarize_ytdlp_error(exc.result)))
+                self.worker_queue.put(("error", f"{exc}\n{detail}"))
             except Exception as exc:
-                if isinstance(exc, YtdlpError):
-                    self.worker_queue.put(("error", summarize_ytdlp_error(exc.result)))
-                else:
-                    self.worker_queue.put(("error", str(exc)))
+                self.worker_queue.put(("error", str(exc)))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -528,3 +514,12 @@ def tool_status(name: str, required: bool) -> str:
     if tool_available(name):
         return "✅ Available"
     return "❌ Missing from PATH" if required else "⚠️ Missing from PATH"
+
+def cookie_status_text(cookies) -> str:
+    if cookies.mode == CookieMode.NONE:
+        return "ℹ️ Not used"
+    if cookies.mode == CookieMode.BROWSER:
+        return f"ℹ️ Browser: {cookies.browser}"
+    if cookies.mode == CookieMode.FILE:
+        return "ℹ️ cookies.txt selected" if cookies.cookies_path else "ℹ️ cookies.txt mode"
+    return "ℹ️ Unknown"

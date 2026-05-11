@@ -138,7 +138,7 @@ yt-dlp config example:
 --proxy http://127.0.0.1:7890
 ```
 
-TubePocket's status page only detects whether `yt-dlp`, `ffmpeg`, and `deno` are visible on `PATH`.
+TubePocket's status page only detects local conditions. It checks whether `yt-dlp`, `ffmpeg`, and `deno` are visible on `PATH`. For EJS support, it can confirm whether `yt-dlp-ejs` is installed in a `uv tool` managed `yt-dlp` environment. If you use a standalone `yt-dlp.exe` from GitHub releases or another installation method, TubePocket may show the EJS status as unknown because official executables may bundle the required components internally.
 
 ## Legal
 
