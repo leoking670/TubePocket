@@ -40,10 +40,13 @@
     button.type = "button";
     button.setAttribute("aria-label", "Open this video in TubePocket");
     button.title = "Open in TubePocket";
-    button.innerHTML = `
-      <span class="tp-mark">TP</span>
-      <span class="tp-text">TubePocket</span>
-    `;
+    const mark = document.createElement("span");
+    mark.className = "tp-mark";
+    mark.textContent = "TP";
+    const text = document.createElement("span");
+    text.className = "tp-text";
+    text.textContent = "TubePocket";
+    button.append(mark, text);
     button.addEventListener("click", openTubePocket);
     applyButtonStyle(button);
     injectStyle();
@@ -146,6 +149,9 @@
   }
 
   setInterval(tick, 1000);
+  window.addEventListener("DOMContentLoaded", tick);
+  window.addEventListener("load", tick);
   document.addEventListener("yt-navigate-finish", tick);
+  new MutationObserver(tick).observe(document.documentElement, { childList: true, subtree: true });
   tick();
 })();
