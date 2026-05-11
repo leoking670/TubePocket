@@ -38,15 +38,24 @@
     const button = document.createElement("button");
     button.id = BUTTON_ID;
     button.type = "button";
-    button.setAttribute("aria-label", "Open this video in TubePocket");
-    button.title = "Open in TubePocket";
-    const mark = document.createElement("span");
-    mark.className = "tp-mark";
-    mark.textContent = "TP";
-    const text = document.createElement("span");
-    text.className = "tp-text";
-    text.textContent = "TubePocket";
-    button.append(mark, text);
+    const label = "在 TubePocket 中打开此视频";
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    const svgNs = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    for (const d of ["M12 3v12", "m7 10 5 5 5-5", "M5 21h14"]) {
+      const path = document.createElementNS(svgNs, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    }
+    button.appendChild(svg);
     button.addEventListener("click", openTubePocket);
     applyButtonStyle(button);
     injectStyle();
@@ -59,20 +68,19 @@
       right: "24px",
       bottom: "96px",
       zIndex: "2147483647",
-      display: "inline-flex",
-      alignItems: "center",
-      gap: "8px",
-      minWidth: "142px",
-      height: "42px",
-      padding: "0 14px 0 10px",
-      border: "1px solid rgba(255,255,255,.22)",
-      borderRadius: "21px",
-      background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-      boxShadow: "0 10px 28px rgba(15,23,42,.28)",
+      display: "inline-grid",
+      placeItems: "center",
+      width: "44px",
+      height: "44px",
+      padding: "0",
+      border: "1px solid rgba(255,255,255,.18)",
+      borderRadius: "50%",
+      background: "rgba(17,24,39,.86)",
+      backdropFilter: "blur(6px)",
+      webkitBackdropFilter: "blur(6px)",
+      boxShadow: "0 6px 18px rgba(15,23,42,.28)",
       color: "#fff",
       cursor: "pointer",
-      font: "600 14px/1.2 Arial, sans-serif",
-      letterSpacing: "0",
     });
   }
 
@@ -83,36 +91,36 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
+      #${BUTTON_ID} {
+        transition: transform .18s ease, background-color .18s ease, box-shadow .18s ease;
+      }
+      #${BUTTON_ID} svg {
+        width: 22px;
+        height: 22px;
+        display: block;
+      }
       #${BUTTON_ID}:hover {
-        filter: brightness(1.06);
-        transform: translateY(-1px);
+        background: rgba(17,24,39,.96);
+        box-shadow: 0 10px 24px rgba(15,23,42,.36);
+        transform: translateY(-1px) scale(1.04);
       }
       #${BUTTON_ID}:active {
-        transform: translateY(0);
+        transform: translateY(0) scale(0.96);
       }
-      #${BUTTON_ID} .tp-mark {
-        display: inline-grid;
-        place-items: center;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        background: rgba(255,255,255,.18);
-        font-size: 11px;
-      }
-      #${BUTTON_ID} .tp-text {
-        white-space: nowrap;
+      #${BUTTON_ID}:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 2px;
       }
       @media (max-width: 720px) {
         #${BUTTON_ID} {
           right: 12px;
           bottom: 72px;
-          min-width: 42px;
-          width: 42px;
-          padding: 0;
-          justify-content: center;
+          width: 36px;
+          height: 36px;
         }
-        #${BUTTON_ID} .tp-text {
-          display: none;
+        #${BUTTON_ID} svg {
+          width: 18px;
+          height: 18px;
         }
       }
     `;

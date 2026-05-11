@@ -45,6 +45,7 @@ def run_app(argv: list[str]) -> None:
     root = tk.Tk()
     root.title("TubePocket")
     root.geometry("1100x720")
+    root.minsize(960, 620)
     app = TubePocketApp(root, launch, error, "URL Scheme" if launch else "Manual", auto_load_launch=False)
     ipc_server: SchemeIpcServer | None = None
     if launch:
@@ -103,18 +104,19 @@ class TubePocketApp:
         self.root.after(100, self.poll_worker_queue)
 
     def _build_ui(self) -> None:
+        self._apply_theme()
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(1, weight=1)
 
-        top = ttk.Frame(self.root, padding=10)
+        top = ttk.Frame(self.root, padding=(16, 12))
         top.grid(row=0, column=0, sticky="ew")
         top.columnconfigure(2, weight=1)
 
-        ttk.Label(top, text="TubePocket").grid(row=0, column=0, sticky="w", padx=(0, 16))
+        ttk.Label(top, text="TubePocket", style="Title.TLabel").grid(row=0, column=0, sticky="w", padx=(0, 24))
         status_area = ttk.Frame(top)
         status_area.grid(row=0, column=1, sticky="ew")
         status_area.columnconfigure(0, weight=1)
-        self.status_label = ttk.Label(status_area, text="")
+        self.status_label = ttk.Label(status_area, text="", style="Subtle.TLabel")
         self.status_label.grid(row=0, column=0, sticky="w")
         self.busy_bar = ttk.Progressbar(status_area, mode="indeterminate", length=160)
         self.busy_bar.grid(row=0, column=1, sticky="e", padx=(12, 0))
@@ -122,7 +124,7 @@ class TubePocketApp:
 
         actions = ttk.Frame(top)
         actions.grid(row=0, column=2, sticky="e")
-        self.register_button = ttk.Button(actions, text="Register protocol", command=self.register_protocol)
+        self.register_button = ttk.Button(actions, text="Register protocol", command=self.register_protocol, style="Accent.TButton")
         self.register_button.grid(row=0, column=0, padx=4)
         ttk.Button(actions, text="Unregister protocol", command=self.unregister_protocol).grid(row=0, column=1, padx=4)
         ttk.Button(actions, text="Refresh", command=self.refresh_status).grid(row=0, column=2, padx=4)
@@ -130,12 +132,136 @@ class TubePocketApp:
         self.main = ttk.Notebook(self.root)
         self.main.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
 
-        self.status_tab = ttk.Frame(self.main, padding=10)
-        self.download_tab = ttk.Frame(self.main, padding=10)
+        self.status_tab = ttk.Frame(self.main, padding=(16, 14))
+        self.download_tab = ttk.Frame(self.main, padding=(16, 14))
         self.main.add(self.status_tab, text="Status")
         self.main.add(self.download_tab, text="Download")
         self._build_status_tab()
         self._build_download_tab()
+
+    def _apply_theme(self) -> None:
+        style = ttk.Style(self.root)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        self.root.configure(background="#f7f7f8")
+
+        base_font = ("Microsoft YaHei UI", 10)
+        title_font = ("Microsoft YaHei UI", 18, "bold")
+        section_font = ("Microsoft YaHei UI", 10, "bold")
+        video_title_font = ("Microsoft YaHei UI", 12, "bold")
+
+        style.configure(".", background="#f7f7f8", foreground="#1f2937", font=base_font)
+        style.configure("TFrame", background="#f7f7f8")
+        style.configure("TLabel", background="#f7f7f8", foreground="#1f2937")
+        style.configure("Title.TLabel", font=title_font, foreground="#111827")
+        style.configure("Subtle.TLabel", foreground="#6b7280")
+        style.configure("VideoTitle.TLabel", font=video_title_font, foreground="#111827")
+        style.configure("Status.ok.TLabel", foreground="#16a34a")
+        style.configure("Status.warn.TLabel", foreground="#d97706")
+        style.configure("Status.error.TLabel", foreground="#dc2626")
+        style.configure("Status.info.TLabel", foreground="#4b5563")
+        style.configure("Section.TLabelframe", background="#f7f7f8", bordercolor="#e5e7eb")
+        style.configure(
+            "Section.TLabelframe.Label",
+            background="#f7f7f8",
+            foreground="#374151",
+            font=section_font,
+        )
+
+        style.configure(
+            "TButton",
+            padding=(12, 6),
+            background="#ffffff",
+            foreground="#1f2937",
+            bordercolor="#d1d5db",
+            focusthickness=0,
+        )
+        style.map(
+            "TButton",
+            background=[("active", "#f3f4f6"), ("disabled", "#f3f4f6")],
+            foreground=[("disabled", "#9ca3af")],
+            bordercolor=[("active", "#9ca3af")],
+        )
+
+        style.configure(
+            "Accent.TButton",
+            padding=(12, 6),
+            background="#111827",
+            foreground="#ffffff",
+            bordercolor="#111827",
+            focusthickness=0,
+        )
+        style.map(
+            "Accent.TButton",
+            background=[("active", "#1f2937"), ("disabled", "#9ca3af")],
+            foreground=[("disabled", "#e5e7eb")],
+            bordercolor=[("active", "#1f2937"), ("disabled", "#9ca3af")],
+        )
+
+        style.configure(
+            "TEntry",
+            fieldbackground="#ffffff",
+            bordercolor="#d1d5db",
+            lightcolor="#d1d5db",
+            darkcolor="#d1d5db",
+            padding=6,
+        )
+        style.configure(
+            "TCombobox",
+            fieldbackground="#ffffff",
+            background="#ffffff",
+            bordercolor="#d1d5db",
+            padding=4,
+        )
+
+        style.configure("TNotebook", background="#f7f7f8", bordercolor="#e5e7eb")
+        style.configure(
+            "TNotebook.Tab",
+            padding=(18, 9),
+            background="#eceef1",
+            foreground="#374151",
+            font=base_font,
+            bordercolor="#e5e7eb",
+            focuscolor="",
+        )
+        style.map(
+            "TNotebook.Tab",
+            background=[("selected", "#ffffff"), ("active", "#f3f4f6")],
+            foreground=[("selected", "#111827")],
+            focuscolor=[("selected", "")],
+        )
+
+        style.configure(
+            "Treeview",
+            background="#ffffff",
+            fieldbackground="#ffffff",
+            foreground="#1f2937",
+            bordercolor="#e5e7eb",
+            rowheight=28,
+        )
+        style.configure(
+            "Treeview.Heading",
+            background="#f3f4f6",
+            foreground="#374151",
+            font=section_font,
+            padding=(8, 6),
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", "#eef2ff")],
+            foreground=[("selected", "#1f2937")],
+        )
+
+        style.configure(
+            "TProgressbar",
+            background="#374151",
+            troughcolor="#e5e7eb",
+            bordercolor="#e5e7eb",
+        )
+        style.configure("TRadiobutton", background="#f7f7f8")
+        style.configure("TCheckbutton", background="#f7f7f8")
 
     def _build_status_tab(self) -> None:
         self.status_tab.columnconfigure(1, weight=1)
@@ -152,13 +278,13 @@ class TubePocketApp:
         ]
         self.status_values: dict[str, ttk.Label] = {}
         for row, (label, key) in enumerate(labels):
-            ttk.Label(self.status_tab, text=label).grid(row=row, column=0, sticky="w", pady=4)
+            ttk.Label(self.status_tab, text=label, width=10).grid(row=row, column=0, sticky="w", pady=6)
             value = ttk.Label(self.status_tab, text="")
-            value.grid(row=row, column=1, sticky="ew", pady=4)
+            value.grid(row=row, column=1, sticky="ew", pady=6)
             self.status_values[key] = value
 
-        cookies = ttk.LabelFrame(self.status_tab, text="Cookies", padding=8)
-        cookies.grid(row=len(labels), column=0, columnspan=2, sticky="ew", pady=(12, 0))
+        cookies = ttk.LabelFrame(self.status_tab, text="Cookies", padding=(12, 8), style="Section.TLabelframe")
+        cookies.grid(row=len(labels), column=0, columnspan=2, sticky="ew", pady=(16, 0))
         cookies.columnconfigure(1, weight=1)
 
         cookie_modes = ttk.Frame(cookies)
@@ -170,7 +296,9 @@ class TubePocketApp:
                 row=0, column=idx, sticky="w", padx=(0, 16)
             )
 
-        self.cookie_none_hint = ttk.Label(cookies, text="✅ No browser cookies will be used.")
+        self.cookie_none_hint = ttk.Label(
+            cookies, text="✓ No browser cookies will be used.", style="Status.ok.TLabel"
+        )
         self.cookie_browser_label = ttk.Label(cookies, text="Browser")
         self.cookie_browser_combo = ttk.Combobox(
             cookies,
@@ -196,8 +324,12 @@ class TubePocketApp:
         url_row.columnconfigure(1, weight=1)
         ttk.Label(url_row, text="URL").grid(row=0, column=0, sticky="w")
         self.url_var = tk.StringVar(value=self.launch.canonical_url if self.launch else "")
-        ttk.Entry(url_row, textvariable=self.url_var).grid(row=0, column=1, sticky="ew", padx=8)
-        self.load_button = ttk.Button(url_row, text="Load", command=lambda: self.load_video_async(self.url_var.get()))
+        url_entry = ttk.Entry(url_row, textvariable=self.url_var)
+        url_entry.grid(row=0, column=1, sticky="ew", padx=8)
+        url_entry.bind("<Return>", lambda _event: self.load_video_async(self.url_var.get()))
+        self.load_button = ttk.Button(
+            url_row, text="Load", command=lambda: self.load_video_async(self.url_var.get()), style="Accent.TButton"
+        )
         self.load_button.grid(row=0, column=2)
 
         mode_row = ttk.Frame(self.download_tab)
@@ -219,8 +351,8 @@ class TubePocketApp:
         self.subtitle_output_combo.grid(row=0, column=4)
         self.subtitle_output_combo.bind("<<ComboboxSelected>>", lambda _event: self.save_cookie_config())
 
-        self.title_label = ttk.Label(self.download_tab, text="No video loaded")
-        self.title_label.grid(row=2, column=0, sticky="ew", pady=(8, 0))
+        self.title_label = ttk.Label(self.download_tab, text="No video loaded", style="VideoTitle.TLabel")
+        self.title_label.grid(row=2, column=0, sticky="ew", pady=(12, 0))
 
         self.table_frame = ttk.Frame(self.download_tab)
         self.table_frame.grid(row=3, column=0, sticky="nsew", pady=(8, 0))
@@ -228,13 +360,14 @@ class TubePocketApp:
         self.table_frame.rowconfigure(0, weight=1)
         self.tree = ttk.Treeview(self.table_frame, show="headings", selectmode="browse")
         self.tree.grid(row=0, column=0, sticky="nsew")
+        self.tree.bind("<Double-1>", self._on_tree_double_click)
         yscroll = ttk.Scrollbar(self.table_frame, orient="vertical", command=self.tree.yview)
         yscroll.grid(row=0, column=1, sticky="ns")
         self.tree.configure(yscrollcommand=yscroll.set)
 
         buttons = ttk.Frame(self.download_tab)
         buttons.grid(row=4, column=0, sticky="ew", pady=(8, 0))
-        self.download_button = ttk.Button(buttons, text="Download", command=self.start_download)
+        self.download_button = ttk.Button(buttons, text="Download", command=self.start_download, style="Accent.TButton")
         self.download_button.grid(row=0, column=0, padx=(0, 8))
         ttk.Checkbutton(buttons, text="Show log", variable=self.log_visible, command=self.update_log_visibility).grid(row=0, column=1)
         self.progress_label = ttk.Label(buttons, text="")
@@ -243,18 +376,20 @@ class TubePocketApp:
         self.log_text = tk.Text(self.download_tab, height=8, wrap="word")
         self.update_log_visibility()
 
+    def _set_status(self, key: str, text: str) -> None:
+        clean, kind = _normalize_status(text)
+        self.status_values[key].configure(text=clean, style=f"Status.{kind}.TLabel")
+
     def refresh_status(self) -> None:
-        self.status_values["ytdlp_status"].configure(text=tool_status("yt-dlp", required=True))
-        self.status_values["ytdlp_ejs_status"].configure(text=yt_dlp_ejs_status())
-        self.status_values["ffmpeg_status"].configure(text=tool_status("ffmpeg", required=True))
-        self.status_values["deno_status"].configure(text=tool_status("deno", required=False))
-        self.status_values["output_status"].configure(text=f"📁 {default_output_dir()}")
-        self.status_values["runtime_status"].configure(text="✅ Packaged exe" if is_packaged() else "ℹ️ Source/development")
-        self.status_values["launch_status"].configure(text=self.launch_source)
+        self._set_status("ytdlp_status", tool_status("yt-dlp", required=True))
+        self._set_status("ytdlp_ejs_status", yt_dlp_ejs_status())
+        self._set_status("ffmpeg_status", tool_status("ffmpeg", required=True))
+        self._set_status("deno_status", tool_status("deno", required=False))
+        self._set_status("output_status", f"📁 {default_output_dir()}")
+        self._set_status("runtime_status", "✅ Packaged exe" if is_packaged() else "ℹ️ Source/development")
+        self._set_status("launch_status", self.launch_source)
         cookies = self.current_cookie_config()
-        cookie_issues: list[str] = []
-        cookie_text = "✅ Ready" if not cookie_issues else "⚠️ " + "; ".join(cookie_issues)
-        self.status_values["cookies_status"].configure(text=cookie_status_text(cookies))
+        self._set_status("cookies_status", cookie_status_text(cookies))
 
         exe = current_executable()
         try:
@@ -266,9 +401,9 @@ class TubePocketApp:
                 text = f"⚠️ Registered elsewhere: {status.target_path} ({exists})"
             else:
                 text = "⚠️ Not registered"
-            self.status_values["protocol_status"].configure(text=text)
+            self._set_status("protocol_status", text)
         except Exception as exc:
-            self.status_values["protocol_status"].configure(text=f"❌ Error: {exc}")
+            self._set_status("protocol_status", f"❌ Error: {exc}")
 
         if not is_packaged():
             self.register_button.configure(state="disabled", text="Register requires packaged exe")
@@ -548,6 +683,13 @@ class TubePocketApp:
             pass
         self.root.after(100, self.poll_worker_queue)
 
+    def _on_tree_double_click(self, event: tk.Event) -> None:
+        if self.tree.identify("region", event.x, event.y) != "cell":
+            return
+        if self.downloading or not self.tree.selection():
+            return
+        self.start_download()
+
     def update_log_visibility(self) -> None:
         if self.log_visible.get():
             self.log_text.grid(row=5, column=0, sticky="nsew", pady=(8, 0))
@@ -610,6 +752,26 @@ def row_for_audio(fmt: MediaFormat) -> list[str]:
 def progress_summary(line: str) -> str:
     match = re.search(r"\[download\]\s+(.+)", line)
     return match.group(1).strip() if match else line[:120]
+
+
+_STATUS_EMOJI_MAP: list[tuple[str, str, str]] = [
+    ("✅", "✓", "ok"),
+    ("❌", "×", "error"),
+    ("⚠️", "!", "warn"),
+    ("⚠", "!", "warn"),
+    ("ℹ️", "·", "info"),
+    ("ℹ", "·", "info"),
+    ("📁", "▸", "info"),
+]
+
+
+def _normalize_status(text: str) -> tuple[str, str]:
+    for emoji, symbol, kind in _STATUS_EMOJI_MAP:
+        if text.startswith(emoji):
+            rest = text[len(emoji):].lstrip()
+            clean = f"{symbol} {rest}" if rest else symbol
+            return (clean, kind)
+    return (text, "info")
 
 
 def tool_status(name: str, required: bool) -> str:
