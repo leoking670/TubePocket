@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from collections.abc import Iterator
@@ -87,7 +88,9 @@ def download_args(selection: DownloadSelection) -> list[str]:
         args = [*base, "--skip-download"]
         args.append("--write-auto-subs" if selection.subtitle.automatic else "--write-subs")
         args.extend(["--sub-langs", selection.subtitle.lang])
-        if selection.subtitle_output != SubtitleOutput.ORIGINAL:
+        if selection.subtitle_output == SubtitleOutput.TEXT:
+            args.extend(["--convert-subs", SubtitleOutput.SRT.value])
+        elif selection.subtitle_output != SubtitleOutput.ORIGINAL:
             args.extend(["--convert-subs", selection.subtitle_output.value])
         args.append(selection.url)
         return args
@@ -96,7 +99,15 @@ def download_args(selection: DownloadSelection) -> list[str]:
 
 
 def run_capture(args: list[str]) -> ProcessResult:
-    completed = subprocess.run(args, capture_output=True, text=True, shell=False, encoding="utf-8", errors="replace")
+    completed = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        shell=False,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=_creation_flags(),
+    )
     return ProcessResult(completed.returncode, completed.stdout, completed.stderr)
 
 
@@ -109,6 +120,7 @@ def stream_process(args: list[str]) -> Iterator[str]:
         shell=False,
         encoding="utf-8",
         errors="replace",
+        creationflags=_creation_flags(),
     )
     assert process.stdout is not None
     for line in process.stdout:
@@ -143,6 +155,65 @@ def validate_cookie_config(cookies: CookieConfig) -> list[str]:
         if not Path(path).is_file():
             return [f"Cookies file does not exist: {path}"]
     return []
+
+
+def finalize_plain_text_subtitle(selection: DownloadSelection) -> Path:
+    if selection.mode != DownloadMode.SUBTITLE or selection.subtitle_output != SubtitleOutput.TEXT:
+        raise ValueError("plain text finalization requires a text subtitle selection")
+    if not selection.subtitle:
+        raise ValueError("plain text finalization requires a subtitle")
+    source = find_downloaded_subtitle(selection.output_dir, selection.video_id, selection.subtitle.lang)
+    text = subtitle_file_to_plain_text(source)
+    target = source.with_suffix(".txt")
+    target.write_text(text, encoding="utf-8")
+    return target
+
+
+def find_downloaded_subtitle(output_dir: Path, video_id: str, lang: str) -> Path:
+    candidates: list[Path] = []
+    for path in output_dir.iterdir():
+        if path.suffix.lower() not in {".srt", ".vtt"}:
+            continue
+        name = path.name
+        if video_id and f"[{video_id}]" not in name:
+            continue
+        if f".{lang}." not in name:
+            continue
+        candidates.append(path)
+    if not candidates:
+        raise FileNotFoundError("Downloaded subtitle file was not found for plain text conversion.")
+    return max(candidates, key=lambda item: item.stat().st_mtime)
+
+
+def subtitle_file_to_plain_text(path: Path) -> str:
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    output: list[str] = []
+    previous = ""
+    skip_note = False
+    for raw in lines:
+        line = raw.strip().lstrip("\ufeff")
+        if not line:
+            skip_note = False
+            continue
+        if line.upper() in {"WEBVTT", "STYLE", "REGION"}:
+            continue
+        if line.upper().startswith("NOTE"):
+            skip_note = True
+            continue
+        if skip_note:
+            continue
+        if line.isdigit():
+            continue
+        if "-->" in line:
+            continue
+        line = re.sub(r"<[^>]+>", "", line)
+        line = re.sub(r"\{\\[^}]+\}", "", line)
+        line = line.strip()
+        if not line or line == previous:
+            continue
+        output.append(line)
+        previous = line
+    return "\n".join(output).strip() + "\n"
 
 
 def yt_dlp_ejs_status(yt_dlp_path: str | None = None, appdata: str | None = None, userprofile: str | None = None) -> str:
@@ -181,3 +252,7 @@ def _looks_like_uv_tool_launcher(executable: str, appdata: str | None = None, us
     if profile and path.name.lower() == "yt-dlp.exe":
         return str(Path(profile) / ".local" / "bin").casefold() in text
     return False
+
+
+def _creation_flags() -> int:
+    return getattr(subprocess, "CREATE_NO_WINDOW", 0)

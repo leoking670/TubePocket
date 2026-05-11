@@ -15,6 +15,7 @@
   "use strict";
 
   const BUTTON_ID = "tubepocket-open-button";
+  const STYLE_ID = "tubepocket-open-style";
 
   function currentVideoUrl() {
     const url = new URL(window.location.href);
@@ -37,38 +38,94 @@
     const button = document.createElement("button");
     button.id = BUTTON_ID;
     button.type = "button";
-    button.textContent = "TubePocket";
-    button.title = "Open this video in TubePocket";
+    button.setAttribute("aria-label", "Open this video in TubePocket");
+    button.title = "Open in TubePocket";
+    button.innerHTML = `
+      <span class="tp-mark">TP</span>
+      <span class="tp-text">TubePocket</span>
+    `;
     button.addEventListener("click", openTubePocket);
-    button.style.border = "1px solid var(--yt-spec-10-percent-layer, #d0d0d0)";
-    button.style.borderRadius = "18px";
-    button.style.padding = "0 14px";
-    button.style.height = "36px";
-    button.style.cursor = "pointer";
-    button.style.font = "inherit";
-    button.style.background = "var(--yt-spec-badge-chip-background, #f2f2f2)";
-    button.style.color = "var(--yt-spec-text-primary, #0f0f0f)";
+    applyButtonStyle(button);
+    injectStyle();
     return button;
   }
 
-  function findActionBar() {
-    return (
-      document.querySelector("#top-level-buttons-computed") ||
-      document.querySelector("ytd-menu-renderer #top-level-buttons-computed") ||
-      document.querySelector("#actions-inner") ||
-      document.querySelector("#menu-container")
-    );
+  function applyButtonStyle(button) {
+    Object.assign(button.style, {
+      position: "fixed",
+      right: "24px",
+      bottom: "96px",
+      zIndex: "2147483647",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "8px",
+      minWidth: "142px",
+      height: "42px",
+      padding: "0 14px 0 10px",
+      border: "1px solid rgba(255,255,255,.22)",
+      borderRadius: "21px",
+      background: "linear-gradient(135deg, #2563eb, #7c3aed)",
+      boxShadow: "0 10px 28px rgba(15,23,42,.28)",
+      color: "#fff",
+      cursor: "pointer",
+      font: "600 14px/1.2 Arial, sans-serif",
+      letterSpacing: "0",
+    });
+  function injectStyle() {
+    if (document.getElementById(STYLE_ID)) {
+      return;
+    }
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = `
+      #${BUTTON_ID}:hover {
+        filter: brightness(1.06);
+        transform: translateY(-1px);
+      }
+      #${BUTTON_ID}:active {
+        transform: translateY(0);
+      }
+      #${BUTTON_ID} .tp-mark {
+        display: inline-grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(255,255,255,.18);
+        font-size: 11px;
+      }
+      #${BUTTON_ID} .tp-text {
+        white-space: nowrap;
+      }
+      @media (max-width: 720px) {
+        #${BUTTON_ID} {
+          right: 12px;
+          bottom: 72px;
+          min-width: 42px;
+          width: 42px;
+          padding: 0;
+          justify-content: center;
+        }
+        #${BUTTON_ID} .tp-text {
+          display: none;
+        }
+      }
+    `;
+    document.head.appendChild(style);
   }
 
   function injectButton() {
-    if (document.getElementById(BUTTON_ID) || !currentVideoUrl()) {
+    const videoUrl = currentVideoUrl();
+    const existing = document.getElementById(BUTTON_ID);
+    if (!videoUrl) {
+      if (existing) {
+        existing.remove();
+      }
       return;
     }
-    const actionBar = findActionBar();
-    if (!actionBar) {
-      return;
+    if (!existing) {
+      document.body.appendChild(makeButton());
     }
-    actionBar.appendChild(makeButton());
   }
 
   let lastHref = "";
@@ -87,4 +144,3 @@
   document.addEventListener("yt-navigate-finish", tick);
   tick();
 })();
-

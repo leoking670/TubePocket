@@ -5,7 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from tubepocket.models import CookieConfig, CookieMode, DownloadMode, DownloadSelection, MediaFormat, SubtitleItem, SubtitleOutput
-from tubepocket.ytdlp import FILENAME_TEMPLATE, cookie_args, download_args, metadata_args, yt_dlp_ejs_status
+from tubepocket.ytdlp import (
+    FILENAME_TEMPLATE,
+    cookie_args,
+    download_args,
+    finalize_plain_text_subtitle,
+    metadata_args,
+    subtitle_file_to_plain_text,
+    yt_dlp_ejs_status,
+)
 
 
 def test_cookie_args() -> None:
@@ -113,6 +121,62 @@ def test_subtitle_download_auto_original(tmp_path: Path) -> None:
 
     assert "--write-auto-subs" in args
     assert "--convert-subs" not in args
+
+
+def test_subtitle_text_download_converts_to_srt_first(tmp_path: Path) -> None:
+    selection = DownloadSelection(
+        mode=DownloadMode.SUBTITLE,
+        url="https://www.youtube.com/watch?v=abc123",
+        subtitle=SubtitleItem(lang="en", automatic=False),
+        subtitle_output=SubtitleOutput.TEXT,
+        output_dir=tmp_path,
+    )
+
+    args = download_args(selection)
+
+    assert args[args.index("--convert-subs") + 1] == "srt"
+
+
+def test_subtitle_file_to_plain_text_removes_timing_and_markup(tmp_path: Path) -> None:
+    source = tmp_path / "sample.en.srt"
+    source.write_text(
+        "\n".join(
+            [
+                "1",
+                "00:00:00,000 --> 00:00:01,000",
+                "<b>Hello</b>",
+                "",
+                "2",
+                "00:00:01,000 --> 00:00:02,000",
+                "Hello",
+                "",
+                "3",
+                "00:00:02,000 --> 00:00:03,000",
+                "world",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    assert subtitle_file_to_plain_text(source) == "Hello\nworld\n"
+
+
+def test_finalize_plain_text_subtitle_writes_txt(tmp_path: Path) -> None:
+    source = tmp_path / "Uploader - Title [abc123].en.srt"
+    source.write_text("1\n00:00:00,000 --> 00:00:01,000\nLine\n", encoding="utf-8")
+    selection = DownloadSelection(
+        mode=DownloadMode.SUBTITLE,
+        url="https://www.youtube.com/watch?v=abc123",
+        subtitle=SubtitleItem(lang="en", automatic=False),
+        subtitle_output=SubtitleOutput.TEXT,
+        video_id="abc123",
+        output_dir=tmp_path,
+    )
+
+    target = finalize_plain_text_subtitle(selection)
+
+    assert target == tmp_path / "Uploader - Title [abc123].en.txt"
+    assert target.read_text(encoding="utf-8") == "Line\n"
 
 
 def test_yt_dlp_ejs_status_detects_uv_tool_package(tmp_path: Path) -> None:

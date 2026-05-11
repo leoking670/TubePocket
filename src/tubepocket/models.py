@@ -18,6 +18,7 @@ class SubtitleOutput(str, Enum):
     ORIGINAL = "original"
     SRT = "srt"
     VTT = "vtt"
+    TEXT = "text"
 
 
 class CookieMode(str, Enum):
@@ -123,6 +124,6 @@ class DownloadSelection:
     audio_format: MediaFormat | None = None
     subtitle: SubtitleItem | None = None
     subtitle_output: SubtitleOutput = SubtitleOutput.ORIGINAL
+    video_id: str = ""
     cookies: CookieConfig = field(default_factory=CookieConfig)
     output_dir: Path = Path.home() / "Downloads" / "TubePocket"
-

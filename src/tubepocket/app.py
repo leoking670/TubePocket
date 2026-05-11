@@ -23,6 +23,7 @@ from tubepocket.ytdlp import (
     SUPPORTED_COOKIE_BROWSERS,
     YtdlpError,
     download_args,
+    finalize_plain_text_subtitle,
     load_metadata,
     stream_process,
     tool_available,
@@ -81,8 +82,14 @@ class TubePocketApp:
         top.columnconfigure(2, weight=1)
 
         ttk.Label(top, text="TubePocket").grid(row=0, column=0, sticky="w", padx=(0, 16))
-        self.status_label = ttk.Label(top, text="")
-        self.status_label.grid(row=0, column=1, sticky="w")
+        status_area = ttk.Frame(top)
+        status_area.grid(row=0, column=1, sticky="ew")
+        status_area.columnconfigure(0, weight=1)
+        self.status_label = ttk.Label(status_area, text="")
+        self.status_label.grid(row=0, column=0, sticky="w")
+        self.busy_bar = ttk.Progressbar(status_area, mode="indeterminate", length=160)
+        self.busy_bar.grid(row=0, column=1, sticky="e", padx=(12, 0))
+        self.busy_bar.grid_remove()
 
         actions = ttk.Frame(top)
         actions.grid(row=0, column=2, sticky="e")
@@ -160,7 +167,8 @@ class TubePocketApp:
         ttk.Label(url_row, text="URL").grid(row=0, column=0, sticky="w")
         self.url_var = tk.StringVar(value=self.launch.canonical_url if self.launch else "")
         ttk.Entry(url_row, textvariable=self.url_var).grid(row=0, column=1, sticky="ew", padx=8)
-        ttk.Button(url_row, text="Load", command=lambda: self.load_video_async(self.url_var.get())).grid(row=0, column=2)
+        self.load_button = ttk.Button(url_row, text="Load", command=lambda: self.load_video_async(self.url_var.get()))
+        self.load_button.grid(row=0, column=2)
 
         mode_row = ttk.Frame(self.download_tab)
         mode_row.grid(row=1, column=0, sticky="ew", pady=(8, 0))
@@ -311,7 +319,8 @@ class TubePocketApp:
         if not url.strip():
             return
         cookies = self.current_cookie_config()
-        self.set_status("Loading metadata...")
+        self.load_button.configure(state="disabled")
+        self.start_busy("Loading metadata...")
         self.append_log(f"Loading metadata: {url}")
 
         def worker() -> None:
@@ -334,7 +343,8 @@ class TubePocketApp:
         self.subtitles = info.subtitles
         self.title_label.configure(text=f"{info.title} - {info.uploader}")
         self.update_mode_view()
-        self.set_status("Metadata loaded")
+        self.stop_busy("Metadata loaded")
+        self.load_button.configure(state="normal")
         self.main.select(self.download_tab)
 
     def update_mode_view(self) -> None:
@@ -393,6 +403,8 @@ class TubePocketApp:
             return
         self.downloading = True
         self.download_button.configure(state="disabled")
+        self.load_button.configure(state="disabled")
+        self.start_busy("Downloading...")
         self.progress_label.configure(text="Starting...")
         self.append_log("Command: " + " ".join(args))
 
@@ -400,6 +412,9 @@ class TubePocketApp:
             try:
                 for line in stream_process(args):
                     self.worker_queue.put(("download-log", line))
+                if selection.mode == DownloadMode.SUBTITLE and selection.subtitle_output == SubtitleOutput.TEXT:
+                    target = finalize_plain_text_subtitle(selection)
+                    self.worker_queue.put(("log", f"Saved plain text subtitle: {target}"))
                 self.worker_queue.put(("done", "Download complete"))
             except Exception as exc:
                 self.worker_queue.put(("error", str(exc)))
@@ -416,16 +431,30 @@ class TubePocketApp:
         if mode == DownloadMode.VIDEO:
             video = find_format(self.videos, selected[0])
             audio = None if video.has_audio else choose_matching_audio(video, self.audios)
-            return DownloadSelection(mode=mode, url=self.video_info.webpage_url or self.url_var.get(), video_format=video, audio_format=audio, cookies=cookies, output_dir=output)
+            return DownloadSelection(
+                mode=mode,
+                url=self.video_info.webpage_url or self.url_var.get(),
+                video_format=video,
+                audio_format=audio,
+                cookies=cookies,
+                output_dir=output,
+            )
         if mode == DownloadMode.AUDIO:
             audio = find_format(self.audios, selected[0])
-            return DownloadSelection(mode=mode, url=self.video_info.webpage_url or self.url_var.get(), audio_format=audio, cookies=cookies, output_dir=output)
+            return DownloadSelection(
+                mode=mode,
+                url=self.video_info.webpage_url or self.url_var.get(),
+                audio_format=audio,
+                cookies=cookies,
+                output_dir=output,
+            )
         idx = int(selected[0])
         return DownloadSelection(
             mode=mode,
             url=self.video_info.webpage_url or self.url_var.get(),
             subtitle=self.subtitles[idx],
             subtitle_output=SubtitleOutput(self.subtitle_output.get()),
+            video_id=self.video_info.video_id,
             cookies=cookies,
             output_dir=output,
         )
@@ -443,15 +472,18 @@ class TubePocketApp:
                         self.progress_label.configure(text=progress_summary(text))
                 elif kind == "error":
                     self.append_log(str(payload))
-                    self.set_status("Error")
+                    self.stop_busy("Error")
                     self.downloading = False
                     self.download_button.configure(state="normal")
+                    self.load_button.configure(state="normal")
                     messagebox.showerror("TubePocket", str(payload))
                 elif kind == "done":
                     self.append_log(str(payload))
                     self.progress_label.configure(text=str(payload))
+                    self.stop_busy(str(payload))
                     self.downloading = False
                     self.download_button.configure(state="normal")
+                    self.load_button.configure(state="normal")
         except queue.Empty:
             pass
         self.root.after(100, self.poll_worker_queue)
@@ -469,6 +501,16 @@ class TubePocketApp:
 
     def set_status(self, text: str) -> None:
         self.status_label.configure(text=text)
+
+    def start_busy(self, text: str) -> None:
+        self.set_status(text)
+        self.busy_bar.grid()
+        self.busy_bar.start(12)
+
+    def stop_busy(self, text: str) -> None:
+        self.busy_bar.stop()
+        self.busy_bar.grid_remove()
+        self.set_status(text)
 
 
 def find_format(formats: list[MediaFormat], format_id: str) -> MediaFormat:

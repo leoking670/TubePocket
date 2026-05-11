@@ -95,7 +95,7 @@ HKCU\Software\Classes\tubepocket
 
 - 影片：選擇一個影片格式。如果該格式只有影像沒有聲音，TubePocket 會選擇最相容的 audio-only 格式，並交由 `yt-dlp` 合併。
 - 音訊：選擇一個 audio-only 格式。
-- 字幕：選擇一個字幕。作者上傳的字幕會全部顯示；自動產生字幕只顯示英文（`en` 與 `en-*`）。輸出格式可以是原始格式、`srt` 或 `vtt`。
+- 字幕：選擇一個字幕。作者上傳的字幕會全部顯示；自動產生字幕只顯示英文（`en` 與 `en-*`）。輸出格式可以是原始格式、`srt`、`vtt` 或純文字 `text`。純文字選項會在下載後移除時間軸與字幕標記。
 
 檔案會儲存到：
 
@@ -147,6 +147,8 @@ yt-dlp 設定檔範例：
 ```
 
 TubePocket 的狀態頁只做本機條件偵測。它會檢查 `yt-dlp`、`ffmpeg`、`deno` 是否能從 `PATH` 找到。對於 EJS 支援，如果你的 `yt-dlp` 是由 `uv tool` 管理，TubePocket 可以確認該環境中是否安裝 `yt-dlp-ejs`。如果你使用 GitHub releases 的獨立 `yt-dlp.exe` 或其他安裝方式，EJS 狀態可能顯示為 unknown，因為官方執行檔可能已經將必要元件內建。
+
+TubePocket 啟動 `yt-dlp` 與 `ffmpeg` 時不會另外開啟控制台視窗。讀取影片資訊與下載期間，GUI 會顯示處理中的狀態提示。
 
 ## 法律與授權
 

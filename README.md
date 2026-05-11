@@ -87,7 +87,7 @@ Each task downloads exactly one content type:
 
 - Video: select one video format. If it is video-only, TubePocket chooses the most compatible audio-only format and asks `yt-dlp` to merge them.
 - Audio: select one audio-only format.
-- Subtitle: select one subtitle. Uploaded subtitles are all shown; automatic subtitles are limited to English (`en` and `en-*`). Output can be original format, `srt`, or `vtt`.
+- Subtitle: select one subtitle. Uploaded subtitles are all shown; automatic subtitles are limited to English (`en` and `en-*`). Output can be original format, `srt`, `vtt`, or plain `text`. The plain text option removes timestamps and subtitle markup after download.
 
 Files are saved to:
 
@@ -139,6 +139,8 @@ yt-dlp config example:
 ```
 
 TubePocket's status page only detects local conditions. It checks whether `yt-dlp`, `ffmpeg`, and `deno` are visible on `PATH`. For EJS support, it can confirm whether `yt-dlp-ejs` is installed in a `uv tool` managed `yt-dlp` environment. If you use a standalone `yt-dlp.exe` from GitHub releases or another installation method, TubePocket may show the EJS status as unknown because official executables may bundle the required components internally.
+
+TubePocket starts `yt-dlp` and `ffmpeg` without opening a separate console window. During metadata loading and downloads, the GUI shows an in-progress status indicator.
 
 ## Legal
 
