@@ -40,6 +40,8 @@ uv run tubepocket-dev
 
 The development GUI can inspect logic and load URLs, but it will not register the `tubepocket://` protocol. Registration is only available in the PyInstaller-built executable.
 
+Parts of this project may be generated or edited with AI assistance and reviewed before release.
+
 ## Build
 
 ```powershell
