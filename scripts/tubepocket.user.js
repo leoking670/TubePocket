@@ -71,6 +71,8 @@
       font: "600 14px/1.2 Arial, sans-serif",
       letterSpacing: "0",
     });
+  }
+
   function injectStyle() {
     if (document.getElementById(STYLE_ID)) {
       return;
@@ -115,6 +117,9 @@
   }
 
   function injectButton() {
+    if (!document.body) {
+      return;
+    }
     const videoUrl = currentVideoUrl();
     const existing = document.getElementById(BUTTON_ID);
     if (!videoUrl) {
