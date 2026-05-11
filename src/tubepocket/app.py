@@ -18,6 +18,7 @@ from tubepocket.formats import (
 )
 from tubepocket.models import CookieMode, DownloadMode, DownloadSelection, MediaFormat, SubtitleItem, SubtitleOutput, VideoInfo
 from tubepocket.registry import ProtocolRegistry, RegistryState, current_executable, is_packaged
+from tubepocket.scheme_ipc import SchemeIpcServer, send_open_to_existing_instance
 from tubepocket.url_scheme import LaunchUrl, UrlError, parse_launch_arg
 from tubepocket.ytdlp import (
     SUPPORTED_COOKIE_BROWSERS,
@@ -39,19 +40,45 @@ def run_app(argv: list[str]) -> None:
             launch = parse_launch_arg(argv[0])
         except UrlError as exc:
             error = str(exc)
+    if launch and send_open_to_existing_instance(launch):
+        return
     root = tk.Tk()
     root.title("TubePocket")
     root.geometry("1100x720")
-    TubePocketApp(root, launch, error)
+    app = TubePocketApp(root, launch, error, "URL Scheme" if launch else "Manual", auto_load_launch=False)
+    ipc_server: SchemeIpcServer | None = None
+    if launch:
+        try:
+            ipc_server = SchemeIpcServer(lambda incoming: app.worker_queue.put(("external-launch", incoming.canonical_url)))
+            ipc_server.start()
+        except OSError as exc:
+            app.set_status(f"URL Scheme instance reuse unavailable: {exc}")
+    if launch:
+        app.load_video_async(launch.canonical_url)
+
+    def close_window() -> None:
+        if ipc_server is not None:
+            ipc_server.close()
+        root.destroy()
+
+    root.protocol("WM_DELETE_WINDOW", close_window)
     root.mainloop()
 
 
 class TubePocketApp:
-    def __init__(self, root: tk.Tk, launch: LaunchUrl | None, launch_error: str | None) -> None:
+    def __init__(
+        self,
+        root: tk.Tk,
+        launch: LaunchUrl | None,
+        launch_error: str | None,
+        launch_source: str,
+        auto_load_launch: bool = True,
+    ) -> None:
         self.root = root
         self.config = load_config()
         self.registry = ProtocolRegistry()
         self.launch = launch
+        self.launch_source = launch_source
         self.video_info: VideoInfo | None = None
         self.videos: list[MediaFormat] = []
         self.audios: list[MediaFormat] = []
@@ -62,14 +89,16 @@ class TubePocketApp:
         self.cookies_browser = tk.StringVar(value=self.config.cookies.browser)
         self.cookies_path = tk.StringVar(value=self.config.cookies.cookies_path)
         self.log_visible = tk.BooleanVar(value=False)
-        self.worker_queue: queue.Queue[tuple[str, str]] = queue.Queue()
+        self.worker_queue: queue.Queue[tuple[str, object]] = queue.Queue()
+        self.loading_metadata = False
         self.downloading = False
+        self.pending_launch_url: str | None = None
 
         self._build_ui()
         self.refresh_status()
         if launch_error:
             self.set_status(f"Invalid launch URL: {launch_error}")
-        if launch:
+        if launch and auto_load_launch:
             self.load_video_async(launch.canonical_url)
         self.root.after(100, self.poll_worker_queue)
 
@@ -119,6 +148,7 @@ class TubePocketApp:
             ("Cookies", "cookies_status"),
             ("Output", "output_status"),
             ("App", "runtime_status"),
+            ("Launch", "launch_status"),
         ]
         self.status_values: dict[str, ttk.Label] = {}
         for row, (label, key) in enumerate(labels):
@@ -220,6 +250,7 @@ class TubePocketApp:
         self.status_values["deno_status"].configure(text=tool_status("deno", required=False))
         self.status_values["output_status"].configure(text=f"📁 {default_output_dir()}")
         self.status_values["runtime_status"].configure(text="✅ Packaged exe" if is_packaged() else "ℹ️ Source/development")
+        self.status_values["launch_status"].configure(text=self.launch_source)
         cookies = self.current_cookie_config()
         cookie_issues: list[str] = []
         cookie_text = "✅ Ready" if not cookie_issues else "⚠️ " + "; ".join(cookie_issues)
@@ -318,7 +349,13 @@ class TubePocketApp:
     def load_video_async(self, url: str) -> None:
         if not url.strip():
             return
+        if self.loading_metadata or self.downloading:
+            self.pending_launch_url = url.strip()
+            self.url_var.set(self.pending_launch_url)
+            self.set_status("Received URL; waiting for current task...")
+            return
         cookies = self.current_cookie_config()
+        self.loading_metadata = True
         self.load_button.configure(state="disabled")
         self.start_busy("Loading metadata...")
         self.append_log(f"Loading metadata: {url}")
@@ -338,6 +375,7 @@ class TubePocketApp:
         threading.Thread(target=worker, daemon=True).start()
 
     def receive_metadata(self, info: VideoInfo) -> None:
+        self.loading_metadata = False
         self.video_info = info
         self.videos, self.audios = split_formats(info)
         self.subtitles = info.subtitles
@@ -346,6 +384,23 @@ class TubePocketApp:
         self.stop_busy("Metadata loaded")
         self.load_button.configure(state="normal")
         self.main.select(self.download_tab)
+        self.load_pending_launch_if_ready()
+
+    def receive_external_launch(self, url: str) -> None:
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+        self.url_var.set(url)
+        self.main.select(self.download_tab)
+        self.append_log(f"Received URL from browser: {url}")
+        self.load_video_async(url)
+
+    def load_pending_launch_if_ready(self) -> None:
+        if self.loading_metadata or self.downloading or not self.pending_launch_url:
+            return
+        url = self.pending_launch_url
+        self.pending_launch_url = None
+        self.load_video_async(url)
 
     def update_mode_view(self) -> None:
         for item in self.tree.get_children():
@@ -465,6 +520,8 @@ class TubePocketApp:
                 kind, payload = self.worker_queue.get_nowait()
                 if kind == "metadata":
                     self.receive_metadata(payload)  # type: ignore[arg-type]
+                elif kind == "external-launch":
+                    self.receive_external_launch(str(payload))
                 elif kind in {"log", "download-log"}:
                     text = str(payload)
                     self.append_log(text)
@@ -473,10 +530,12 @@ class TubePocketApp:
                 elif kind == "error":
                     self.append_log(str(payload))
                     self.stop_busy("Error")
+                    self.loading_metadata = False
                     self.downloading = False
                     self.download_button.configure(state="normal")
                     self.load_button.configure(state="normal")
                     messagebox.showerror("TubePocket", str(payload))
+                    self.load_pending_launch_if_ready()
                 elif kind == "done":
                     self.append_log(str(payload))
                     self.progress_label.configure(text=str(payload))
@@ -484,6 +543,7 @@ class TubePocketApp:
                     self.downloading = False
                     self.download_button.configure(state="normal")
                     self.load_button.configure(state="normal")
+                    self.load_pending_launch_if_ready()
         except queue.Empty:
             pass
         self.root.after(100, self.poll_worker_queue)

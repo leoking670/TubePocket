@@ -81,6 +81,8 @@ The app provides:
 
 No administrator privileges are required.
 
+Manual starts and browser URL Scheme starts are kept separate. A browser-launched TubePocket window is reused for later `tubepocket://` opens, so clicking the userscript repeatedly does not create a new app window each time.
+
 ## Download Behavior
 
 Each task downloads exactly one content type:
