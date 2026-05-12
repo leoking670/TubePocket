@@ -11,6 +11,7 @@ from tubepocket.ytdlp import (
     download_args,
     finalize_plain_text_subtitle,
     metadata_args,
+    subtitle_download_dir,
     subtitle_file_to_plain_text,
     yt_dlp_ejs_status,
 )
@@ -135,6 +136,8 @@ def test_subtitle_text_download_converts_to_srt_first(tmp_path: Path) -> None:
     args = download_args(selection)
 
     assert args[args.index("--convert-subs") + 1] == "srt"
+    assert Path(args[args.index("-P") + 1]) == subtitle_download_dir(selection)
+    assert Path(args[args.index("-P") + 1]) != tmp_path
 
 
 def test_subtitle_file_to_plain_text_removes_timing_and_markup(tmp_path: Path) -> None:
@@ -162,8 +165,6 @@ def test_subtitle_file_to_plain_text_removes_timing_and_markup(tmp_path: Path) -
 
 
 def test_finalize_plain_text_subtitle_writes_txt(tmp_path: Path) -> None:
-    source = tmp_path / "Uploader - Title [abc123].en.srt"
-    source.write_text("1\n00:00:00,000 --> 00:00:01,000\nLine\n", encoding="utf-8")
     selection = DownloadSelection(
         mode=DownloadMode.SUBTITLE,
         url="https://www.youtube.com/watch?v=abc123",
@@ -172,11 +173,17 @@ def test_finalize_plain_text_subtitle_writes_txt(tmp_path: Path) -> None:
         video_id="abc123",
         output_dir=tmp_path,
     )
+    source_dir = subtitle_download_dir(selection)
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source = source_dir / "Uploader - Title [abc123].en.srt"
+    source.write_text("1\n00:00:00,000 --> 00:00:01,000\nLine\n", encoding="utf-8")
 
     target = finalize_plain_text_subtitle(selection)
 
     assert target == tmp_path / "Uploader - Title [abc123].en.txt"
     assert target.read_text(encoding="utf-8") == "Line\n"
+    assert not source.exists()
+    assert not list(tmp_path.glob("*.srt"))
 
 
 def test_yt_dlp_ejs_status_detects_uv_tool_package(tmp_path: Path) -> None:

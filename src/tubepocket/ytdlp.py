@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
+import tempfile
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -58,12 +60,14 @@ def load_metadata(url: str, cookies: CookieConfig) -> tuple[VideoInfo, ProcessRe
 
 def download_args(selection: DownloadSelection) -> list[str]:
     selection.output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = subtitle_download_dir(selection)
+    output_dir.mkdir(parents=True, exist_ok=True)
     base = [
         "yt-dlp",
         "--no-playlist",
         "--newline",
         "-P",
-        str(selection.output_dir),
+        str(output_dir),
         "-o",
         FILENAME_TEMPLATE,
         *cookie_args(selection.cookies),
@@ -162,15 +166,26 @@ def finalize_plain_text_subtitle(selection: DownloadSelection) -> Path:
         raise ValueError("plain text finalization requires a text subtitle selection")
     if not selection.subtitle:
         raise ValueError("plain text finalization requires a subtitle")
-    source = find_downloaded_subtitle(selection.output_dir, selection.video_id, selection.subtitle.lang)
+    source = find_downloaded_subtitle(subtitle_download_dir(selection), selection.video_id, selection.subtitle.lang)
     text = subtitle_file_to_plain_text(source)
-    target = source.with_suffix(".txt")
+    target = selection.output_dir / source.with_suffix(".txt").name
+    selection.output_dir.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
+    source.unlink(missing_ok=True)
+    _remove_empty_parent(source)
     return target
+
+
+def subtitle_download_dir(selection: DownloadSelection) -> Path:
+    if selection.mode == DownloadMode.SUBTITLE and selection.subtitle_output == SubtitleOutput.TEXT:
+        return _plain_text_subtitle_work_dir(selection)
+    return selection.output_dir
 
 
 def find_downloaded_subtitle(output_dir: Path, video_id: str, lang: str) -> Path:
     candidates: list[Path] = []
+    if not output_dir.exists():
+        raise FileNotFoundError("Downloaded subtitle file was not found for plain text conversion.")
     for path in output_dir.iterdir():
         if path.suffix.lower() not in {".srt", ".vtt"}:
             continue
@@ -214,6 +229,22 @@ def subtitle_file_to_plain_text(path: Path) -> str:
         output.append(line)
         previous = line
     return "\n".join(output).strip() + "\n"
+
+
+def _plain_text_subtitle_work_dir(selection: DownloadSelection) -> Path:
+    lang = selection.subtitle.lang if selection.subtitle else ""
+    key = "\0".join([str(selection.output_dir.resolve()), selection.video_id, lang])
+    digest = hashlib.sha1(key.encode("utf-8")).hexdigest()[:12]
+    safe_video_id = re.sub(r"[^A-Za-z0-9_.-]+", "_", selection.video_id).strip("._") or "video"
+    safe_lang = re.sub(r"[^A-Za-z0-9_.-]+", "_", lang).strip("._") or "subtitle"
+    return Path(tempfile.gettempdir()) / "TubePocket" / "plain-text-subtitles" / f"{safe_video_id}-{safe_lang}-{digest}"
+
+
+def _remove_empty_parent(path: Path) -> None:
+    try:
+        path.parent.rmdir()
+    except OSError:
+        pass
 
 
 def yt_dlp_ejs_status(yt_dlp_path: str | None = None, appdata: str | None = None, userprofile: str | None = None) -> str:
